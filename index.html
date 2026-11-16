@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Second Life Ledger – everyday waste to value</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EEF2EE;--ink:#17261F;--mute:#5B6B63;--card:#fff;--line:#D3DCD5;--moss:#2D6A4F;--moss2:#DCEBE2;--gold:#B8862B;--gold2:#F6ECD3;--red:#A33B3B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "IBM Plex Sans",system-ui,sans-serif}
+h1,h2,h3{font-family:"Bricolage Grotesque",system-ui,sans-serif;margin:0;line-height:1.1}
+header{padding:28px 20px 12px;max-width:980px;margin:auto}
+h1{font-size:clamp(2rem,6vw,3.4rem);font-weight:800;letter-spacing:-.02em}
+.sub{color:var(--mute);max-width:56ch;margin:8px 0 0}
+main{max-width:980px;margin:auto;padding:0 20px 60px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:16px 0}
+select,input,button{font:inherit;color:inherit}
+select,input[type=text],input[type=number]{padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;min-width:0}
+button{cursor:pointer;border:0;border-radius:8px;padding:10px 16px;background:var(--moss);color:#fff;font-weight:500}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.on{background:var(--ink);color:#fff}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.stat b{display:block;font:800 1.9rem "Bricolage Grotesque",sans-serif}
+.stat span{color:var(--mute);font-size:.9rem}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1 1 150px}
+label{font-size:.88rem;color:var(--mute);display:block;margin-bottom:3px}
+.ladder{margin:12px 0 0;padding:0;list-style:none}
+.ladder li{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px}
+.ladder li.best{background:var(--moss2);border-color:var(--moss)}
+.ladder li.no{opacity:.55;border-style:dashed}
+.tag{font-size:.8rem;color:var(--mute)}
+.note{background:var(--gold2);border-left:4px solid var(--gold);padding:10px 12px;border-radius:6px;margin-top:10px}
+.bars div.r{display:grid;grid-template-columns:110px 1fr 90px;gap:8px;align-items:center;margin:6px 0;font-size:.92rem}
+.bars i{display:block;height:14px;background:var(--moss);border-radius:4px}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+td,th{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left}
+.wrap{overflow-x:auto}
+.chk{display:inline-flex;gap:4px;align-items:center;margin-right:10px;font-size:.88rem}
+@media (prefers-color-scheme:dark){:root{--bg:#101A15;--ink:#E7EFE9;--mute:#9DB0A5;--card:#17241D;--line:#2A3B31;--moss2:#1F3A2D;--gold2:#2D2614}select,input[type=text],input[type=number]{background:#101A15}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Second Life Ledger</h1>
+  <p class="sub">Waste from any site (a college, a home, a restaurant, an apartment) routed to the highest-value use its local buyers allow. Log it, see what it’s worth, and see what you lose by not having the right buyer.</p>
+</header>
+<main>
+  <div class="bar">
+    <div><label for="campus">Site</label><select id="campus"></select></div>
+    <div class="tabs" id="tabs" style="margin:18px 0 0"></div>
+  </div>
+  <div id="view"></div>
+</main>
+<script>
+"use strict";
+// ---------- Data model ----------
+// Each waste category has a "value ladder": uses ranked best to worst.
+// [label, share of top price, buyer type required]. Bin-it is always available at 0.
+const CATS={
+ food:{n:"Food waste",co2:.5,kw:["rice","food","veg","meal","bread","peel","leftover","fruit","curry","mess"],
+  lad:[["Donate edible surplus",1,"ngo"],["Animal feed",.7,"farm"],["Compost",.4,"composter"]]},
+ oil:{n:"Used cooking oil",co2:2,kw:["oil","fry","ghee","grease"],
+  lad:[["Biodiesel feedstock",1,"biodiesel"],["Soap making",.7,"soapmaker"]]},
+ paper:{n:"Paper & cardboard",co2:1,kw:["paper","card","notebook","print","book","box"],
+  lad:[["Reuse / craft",1,"artisan"],["Recycle to pulp",.6,"recycler"]]},
+ plastic:{n:"Plastic & bottles",co2:1.5,kw:["plastic","bottle","cup","wrapper","pet"],
+  lad:[["Upcycle / reuse",1,"artisan"],["Recycle to pellets",.6,"recycler"]]},
+ ewaste:{n:"E-waste",co2:2,kw:["laptop","phone","charger","cable","battery","pcb","keyboard","mouse"],
+  lad:[["Refurbish / resell",1,"refurb"],["Recover metals",.5,"recycler"]]},
+ garden:{n:"Garden & yard waste",co2:.4,kw:["leaf","leaves","grass","garden","yard","branch","flower"],
+  lad:[["Feed / mulch for farms",.7,"farm"],["Compost",.4,"composter"]]},
+ glass:{n:"Glass",co2:.3,kw:["glass","jar","bottle glass"],
+  lad:[["Reuse / craft",1,"artisan"],["Recycle",.6,"recycler"]]},
+ textile:{n:"Clothes & textiles",co2:1.2,kw:["cloth","shirt","jeans","fabric","uniform","bedsheet","towel"],
+  lad:[["Donate / reuse",1,"ngo"],["Upcycle",.7,"artisan"],["Rag recycling",.3,"recycler"]]}
+};
+const TYPES={ngo:"NGO / food bank",farm:"Farm / feed buyer",composter:"Composter",biodiesel:"Biodiesel buyer",soapmaker:"Soap maker",artisan:"Artisan / upcycler",recycler:"Scrap dealer / recycler (kabadiwala)",refurb:"Refurbisher"};
+// Sample data: replace with real local quotes before using for real.
+const KINDS=["College","Hostel","Household","Restaurant","Apartment","Office","Shop"];
+const PRESET={Hostel:["food","oil","paper","plastic","textile","ewaste"],College:["food","paper","plastic","ewaste","oil","textile"],Household:["food","plastic","paper","garden","textile","glass"],Restaurant:["food","oil","glass","plastic","paper"],Apartment:["food","garden","paper","plastic","glass"],Office:["paper","ewaste","plastic","food"],Shop:["paper","plastic","glass","textile"]};
+const catOrder=c=>{const p=PRESET[c.kind]||[];return p.concat(Object.keys(CATS).filter(k=>!p.includes(k)))};
+const SEED=[
+ {id:"c1",kind:"College",name:"Rathinam College (RGU) – Coimbatore",cur:"₹",
+  price:{food:4,oil:55,paper:12,plastic:18,ewaste:40,textile:15,garden:2,glass:3},
+  buyers:[{n:"Local food bank (sample)",t:["ngo"]},{n:"Dairy farm (sample)",t:["farm","composter"]},{n:"Oil collector (sample)",t:["biodiesel"]},{n:"Scrap dealer (sample)",t:["recycler"]},{n:"Refurb shop (sample)",t:["refurb"]}]},
+ {id:"c2",kind:"College",name:"Demo College – Boston, USA",cur:"$",
+  price:{food:.15,oil:.5,paper:.1,plastic:.2,ewaste:.6,textile:.3,garden:.05,glass:.05},
+  buyers:[{n:"Food rescue (sample)",t:["ngo"]},{n:"Recycling co-op (sample)",t:["recycler"]}]},
+ {id:"c3",kind:"College",name:"Demo College – Nairobi, Kenya",cur:"KSh",
+  price:{food:10,oil:60,paper:15,plastic:25,ewaste:80,textile:40,garden:3,glass:5},
+  buyers:[{n:"Compost farm (sample)",t:["farm","composter"]},{n:"Jua kali artisans (sample)",t:["artisan"]},{n:"Scrap yard (sample)",t:["recycler"]}]},
+ {id:"c4",kind:"Household",name:"Demo Household – Chennai flat, India",cur:"₹",
+  price:{food:3,oil:50,paper:12,plastic:15,ewaste:35,textile:12,garden:2,glass:3},
+  buyers:[{n:"Local kabadiwala (sample)",t:["recycler"]},{n:"Society compost pit (sample)",t:["composter"]}]},
+ {id:"c5",kind:"Restaurant",name:"Demo Restaurant – Coimbatore, India",cur:"₹",
+  price:{food:4,oil:55,paper:12,plastic:15,ewaste:35,textile:12,garden:2,glass:4},
+  buyers:[{n:"Oil collector (sample)",t:["biodiesel"]},{n:"Pig/poultry farm (sample)",t:["farm"]},{n:"Scrap dealer (sample)",t:["recycler"]}]},
+ {id:"c6",kind:"Hostel",name:"Rathinam Hostel Mess – Coimbatore",cur:"₹",
+  price:{food:4,oil:55,paper:12,plastic:16,ewaste:40,textile:14,garden:2,glass:3},
+  buyers:[{n:"Pig/poultry farm (sample)",t:["farm"]},{n:"Oil collector (sample)",t:["biodiesel"]},{n:"Food bank (sample)",t:["ngo"]},{n:"Scrap dealer (sample)",t:["recycler"]}]},
+ {id:"c7",kind:"Household",name:"Demo Home – Hosur / Krishnagiri",cur:"₹",
+  price:{food:2,oil:45,paper:11,plastic:14,ewaste:30,textile:10,garden:2,glass:3},
+  buyers:[{n:"Local kabadiwala (sample)",t:["recycler"]},{n:"Neighbour farmer (sample)",t:["farm","composter"]}]},
+ {id:"c8",kind:"Apartment",name:"Demo Apartment Complex – Coimbatore",cur:"₹",
+  price:{food:3,oil:50,paper:12,plastic:15,ewaste:35,textile:12,garden:2,glass:3},
+  buyers:[{n:"Compost unit (sample)",t:["composter"]},{n:"Kabadiwala (sample)",t:["recycler"]},{n:"Craft makers (sample)",t:["artisan"]}]},
+ {id:"c9",kind:"Office",name:"Demo IT Office – Coimbatore",cur:"₹",
+  price:{food:3,oil:50,paper:13,plastic:15,ewaste:45,textile:12,garden:2,glass:3},
+  buyers:[{n:"Refurb dealer (sample)",t:["refurb"]},{n:"Scrap dealer (sample)",t:["recycler"]}]},
+ {id:"c10",kind:"Shop",name:"Demo Kirana Shop – Tamil Nadu",cur:"₹",
+  price:{food:2,oil:45,paper:12,plastic:15,ewaste:30,textile:10,garden:2,glass:3},
+  buyers:[{n:"Kabadiwala (sample)",t:["recycler"]}]}
+];
+let S={campuses:SEED,logs:[],cur:"c1",tab:"log",last:null};
+try{const x=JSON.parse(localStorage.getItem("sll_v2")||"null");if(x&&x.campuses){S.campuses=x.campuses;S.logs=x.logs;S.cur=x.cur}}catch(e){}
+function save(){try{localStorage.setItem("sll_v2",JSON.stringify({campuses:S.campuses,logs:S.logs,cur:S.cur}))}catch(e){}}
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const campus=()=>{const c=S.campuses.find(c=>c.id===S.cur)||S.campuses[0];for(const k in CATS)if(c.price[k]==null)c.price[k]=1;c.kind=c.kind||'College';return c};
+const fmt=(n,c)=>c+" "+(n>=100?Math.round(n):n.toFixed(2)).toLocaleString();
+
+// ---------- Engine ----------
+function classify(text){
+ const t=text.toLowerCase();
+ for(const k in CATS) if(CATS[k].kw.some(w=>t.includes(w))) return k;
+ return null;
+}
+function evaluate(c,cat,kg){
+ const C=CATS[cat],has=t=>c.buyers.some(b=>b.t.includes(t)),top=c.price[cat]*kg;
+ let best=null,bi=-1;
+ C.lad.forEach((r,i)=>{if(bi<0&&has(r[2])){best=r;bi=i}});
+ const val=best?top*best[1]:0;
+ // innovation: the best rung that is blocked by a missing buyer type
+ let unlock=null;
+ for(let i=0;i<(bi<0?C.lad.length:bi);i++){unlock={type:C.lad[i][2],use:C.lad[i][0],gain:top*C.lad[i][1]-val};break}
+ const co2=best?kg*C.co2:0;
+ return {use:best?best[0]:"Bin it (no local buyer)",val,co2,credits:Math.round(co2*10),unlock,ladder:C.lad.map(r=>({use:r[0],type:r[2],ok:has(r[2]),v:top*r[1]})),bi};
+}
+function totals(id){
+ const L=S.logs.filter(l=>l.campus===id);
+ return {kg:L.reduce((a,l)=>a+l.kg,0),val:L.reduce((a,l)=>a+l.val,0),co2:L.reduce((a,l)=>a+l.co2,0),cr:L.reduce((a,l)=>a+l.credits,0),n:L.length,L};
+}
+
+// ---------- Views ----------
+function renderTabs(){
+ $("#tabs").innerHTML=[["log","Log waste"],["dash","Dashboard"],["net","Site network"],["setup","Site setup"]]
+  .map(t=>`<button class="${S.tab===t[0]?"on":"ghost"}" data-t="${t[0]}">${t[1]}</button>`).join("");
+ $("#campus").innerHTML=S.campuses.map(c=>`<option value="${c.id}" ${c.id===S.cur?"selected":""}>${esc(c.name)}</option>`).join("");
+}
+function vLog(){
+ const c=campus(),r=S.last;
+ let out=`<div class="card"><h2>Log waste</h2>
+ <div class="row" style="margin-top:12px">
+  <div><label for="desc">What is it? (we guess the category)</label><input type="text" id="desc" placeholder="e.g. leftover rice from mess"></div>
+  <div><label for="cat">Category</label><select id="cat">${catOrder(c).map(k=>`<option value="${k}">${CATS[k].n}</option>`).join("")}</select></div>
+  <div><label for="kg">Quantity (kg)</label><input type="number" id="kg" min="0.1" step="0.1" value="10"></div>
+ </div><p><button id="go">Log and value it</button></p></div>`;
+ if(r){
+  out+=`<div class="card"><h2>${esc(CATS[r.cat].n)}: ${r.kg} kg</h2>
+  <div class="grid" style="margin-top:12px">
+   <div class="stat"><b>${fmt(r.val,c.cur)}</b><span>earned or saved</span></div>
+   <div class="stat"><b>${r.co2.toFixed(1)} kg</b><span>CO₂e avoided</span></div>
+   <div class="stat"><b>${r.credits}</b><span>circular credits</span></div></div>
+  <h3 style="margin-top:16px;font-size:1.1rem">Value ladder at this site</h3>
+  <ul class="ladder">${r.ladder.map((x,i)=>`<li class="${i===r.bi?"best":x.ok?"":"no"}"><span>${esc(x.use)} <span class="tag">needs: ${TYPES[x.type]}</span></span><span>${x.ok?fmt(x.v,c.cur):"no buyer"}</span></li>`).join("")}
+   <li class="${r.bi<0?"best":"no"}"><span>Bin it</span><span>${fmt(0,c.cur)}</span></li></ul>
+  ${r.unlock&&r.unlock.gain>0?`<div class="note"><b>Money left on the table:</b> adding a <b>${TYPES[r.unlock.type]}</b> would unlock “${esc(r.unlock.use)}” and add ${fmt(r.unlock.gain,c.cur)} for this batch.</div>`:`<div class="note">This batch is already going to its highest-value use here.</div>`}</div>`;
+ }
+ return out;
+}
+function vDash(){
+ const c=campus(),T=totals(c.id);
+ const by={};T.L.forEach(l=>by[l.cat]=(by[l.cat]||0)+l.val);
+ const mx=Math.max(1,...Object.values(by)),miss={};
+ T.L.forEach(l=>{if(l.unlock&&l.unlock.gain>0)miss[l.unlock.type]=(miss[l.unlock.type]||0)+l.unlock.gain});
+ const mk=Object.keys(miss).sort((a,b)=>miss[b]-miss[a]);
+ return `<div class="grid">
+  <div class="card stat"><b>${T.kg.toFixed(0)} kg</b><span>waste diverted</span></div>
+  <div class="card stat"><b>${fmt(T.val,c.cur)}</b><span>value recovered</span></div>
+  <div class="card stat"><b>${T.co2.toFixed(0)} kg</b><span>CO₂e avoided</span></div>
+  <div class="card stat"><b>${T.cr}</b><span>circular credits</span></div></div>
+ <div class="card"><h2>Value by waste type</h2><div class="bars" style="margin-top:10px">${Object.keys(by).map(k=>`<div class="r"><span>${CATS[k].n}</span><i style="width:${by[k]/mx*100}%"></i><span>${fmt(by[k],c.cur)}</span></div>`).join("")||"<p class='tag'>No logs yet. Log waste to see value.</p>"}</div></div>
+ <div class="card"><h2>What this site is missing</h2>${mk.length?mk.map(k=>`<div class="note"><b>${TYPES[k]}</b>: ${fmt(miss[k],c.cur)} of extra value unlocked from logged waste.</div>`).join(""):"<p class='tag'>Nothing blocked so far.</p>"}</div>
+ <div class="card"><h2>Recent logs</h2><div class="wrap"><table><tr><th>Item</th><th>kg</th><th>Used for</th><th>Value</th></tr>${T.L.slice(-8).reverse().map(l=>`<tr><td>${esc(l.desc||CATS[l.cat].n)}</td><td>${l.kg}</td><td>${esc(l.use)}</td><td>${fmt(l.val,c.cur)}</td></tr>`).join("")}</table></div></div>`;
+}
+function vNet(){
+ const rows=S.campuses.map(c=>({c,t:totals(c.id)})).sort((a,b)=>b.t.cr-a.t.cr);
+ return `<div class="card"><h2>Site network</h2><p class="tag">Any site can join: a college, a home, a restaurant, an office. Each uses its own currency, prices and buyers. Credits make impact comparable everywhere.</p>
+ <div class="wrap"><table><tr><th>#</th><th>Site</th><th>kg</th><th>Value</th><th>Credits</th></tr>${rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.c.name)} <span class="tag">${r.c.kind}</span></td><td>${r.t.kg.toFixed(0)}</td><td>${fmt(r.t.val,r.c.cur)}</td><td>${r.t.cr}</td></tr>`).join("")}</table></div></div>
+ <div class="card"><h2>Add your site</h2><div class="row" style="margin-top:10px">
+  <div><label for="nn">Name and city</label><input type="text" id="nn" placeholder="Your home, college, shop..."></div>
+  <div><label for="nk">Type</label><select id="nk">${KINDS.map(k=>`<option>${k}</option>`).join("")}</select></div>
+  <div><label for="nc">Currency symbol</label><input type="text" id="nc" placeholder="₹, $, €, ..." maxlength="4"></div></div>
+  <p><button id="add">Add site</button></p></div>`;
+}
+function vSetup(){
+ const c=campus();
+ return `<div class="card"><h2>Prices at ${esc(c.name)} (${c.kind})</h2><p class="tag">Best-use price per kg in ${esc(c.cur)}. Get these from a local dealer.</p>
+ <div class="row" style="margin-top:10px">${Object.keys(CATS).map(k=>`<div><label for="p_${k}">${CATS[k].n}</label><input type="number" step="any" min="0" id="p_${k}" data-p="${k}" value="${c.price[k]}"></div>`).join("")}</div></div>
+ <div class="card"><h2>Local buyers</h2><ul class="ladder">${c.buyers.map((b,i)=>`<li><span>${esc(b.n)} <span class="tag">${b.t.map(t=>TYPES[t]).join(", ")}</span></span><button class="ghost" data-rm="${i}">Remove</button></li>`).join("")||"<li class='no'>No buyers yet</li>"}</ul>
+ <div class="row" style="margin-top:10px"><div><label for="bn">Buyer name</label><input type="text" id="bn"></div></div>
+ <p>${Object.keys(TYPES).map(t=>`<label class="chk"><input type="checkbox" data-bt="${t}"> ${TYPES[t]}</label>`).join("")}</p>
+ <p><button id="addb">Add buyer</button></p></div>`;
+}
+function render(){
+ renderTabs();
+ $("#view").innerHTML={log:vLog,dash:vDash,net:vNet,setup:vSetup}[S.tab]();
+ if(S.tab==="log"){const d=$("#desc");d.oninput=()=>{const k=classify(d.value);if(k)$("#cat").value=k};
+  $("#go").onclick=()=>{const cat=$("#cat").value,kg=parseFloat($("#kg").value);if(!(kg>0))return;
+   const c=campus(),e=evaluate(c,cat,kg);
+   S.last={cat,kg,...e};S.logs.push({campus:c.id,cat,kg,desc:$("#desc").value.slice(0,60),use:e.use,val:e.val,co2:e.co2,credits:e.credits,unlock:e.unlock});save();render()}}
+ if(S.tab==="net")$("#add").onclick=()=>{const n=$("#nn").value.trim();if(!n)return;
+  S.campuses.push({id:"c"+Date.now(),kind:$("#nk").value,name:n,cur:$("#nc").value.trim()||"$",price:{...campus().price},buyers:[]});S.cur=S.campuses[S.campuses.length-1].id;S.tab="setup";save();render()};
+ if(S.tab==="setup"){
+  document.querySelectorAll("[data-p]").forEach(i=>i.onchange=()=>{campus().price[i.dataset.p]=parseFloat(i.value)||0;save()});
+  document.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{campus().buyers.splice(+b.dataset.rm,1);save();render()});
+  $("#addb").onclick=()=>{const n=$("#bn").value.trim(),t=[...document.querySelectorAll("[data-bt]:checked")].map(x=>x.dataset.bt);if(!n||!t.length)return;campus().buyers.push({n,t});save();render()}}
+}
+$("#tabs").onclick=e=>{const t=e.target.dataset.t;if(t){S.tab=t;render()}};
+$("#campus").onchange=e=>{S.cur=e.target.value;S.last=null;save();render()};
+// seed a few demo logs on first run so the dashboard and network are not empty
+if(!S.logs.length){[["c1","food",320],["c1","paper",95],["c1","plastic",60],["c1","ewaste",25],["c1","oil",30],["c1","textile",40],["c2","plastic",30],["c2","food",60],["c2","paper",80],["c3","food",80],["c3","ewaste",12],["c3","plastic",45],["c4","food",20],["c4","paper",15],["c4","plastic",8],["c4","garden",12],["c4","textile",6],["c4","glass",5],["c5","oil",40],["c5","food",90],["c5","glass",30],["c5","paper",20],["c6","food",450],["c6","oil",35],["c6","plastic",50],["c6","paper",40],["c7","food",14],["c7","paper",10],["c7","garden",18],["c7","plastic",6],["c8","food",150],["c8","garden",60],["c8","paper",70],["c8","glass",25],["c8","plastic",35],["c9","paper",120],["c9","ewaste",40],["c9","plastic",20],["c10","paper",50],["c10","plastic",30],["c10","glass",15]].forEach(([id,cat,kg])=>{
+ const c=S.campuses.find(x=>x.id===id),e=evaluate(c,cat,kg);S.logs.push({campus:id,cat,kg,desc:"Sample "+CATS[cat].n,use:e.use,val:e.val,co2:e.co2,credits:e.credits,unlock:e.unlock})})}
+render();
+</script>
+</body>
+</html>
