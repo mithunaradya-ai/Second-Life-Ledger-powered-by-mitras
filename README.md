@@ -12,6 +12,7 @@ Enable GitHub Pages (Settings > Pages > Deploy from branch > main / root) and op
 3. **Money left on the table:** shows which missing buyer type would unlock a higher rung, and how much extra value that adds.
 4. **Circular credits:** CO2e avoided is converted to a comparable score across campuses.
 5. **Campus network:** any college can join with its own currency, prices and buyers. Leaderboard across campuses.
+6."right this one model  if u guys watching this support me i will excute this soon "
 
 ## Works for any site
 Sites are data, not code: type, name, currency symbol, per-kg prices, and a buyer directory. Ten sample sites are preloaded: Rathinam College (RGU) and its hostel mess, colleges in the USA and Kenya, two households, an apartment complex, a restaurant, an IT office and a kirana shop.
